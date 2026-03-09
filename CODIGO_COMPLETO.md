@@ -54,6 +54,14 @@
     - [validation.middleware.ts](#validationmiddlewarets)
     - [error.middleware.ts](#errormiddlewarets)
     - [auth.middleware.ts](#authmiddlewarets)
+11. [Tests](#11-tests)
+    - [jest.config.js](#configuracion-de-jest)
+    - [customers.schemas.test.ts](#customersschemastestts)
+    - [bookings.schemas.test.ts](#bookingsschemastestts)
+    - [services.controller.test.ts](#servicescontrollertestts)
+    - [customers.service.test.ts](#customersservicetestts)
+    - [bookings.service.test.ts](#bookingsservicetestts)
+    - [custom-errors.test.ts](#custom-errorstestts)
 
 ---
 
@@ -1872,6 +1880,549 @@ export const authMiddleware = (roles: string[] = []) => {
 
 ---
 
+## 11. Tests
+
+El proyecto utiliza **Jest** con **ts-jest** para testing. Los tests estan organizados en `src/__tests__/` siguiendo la estructura de modulos.
+
+### Configuracion de Jest
+
+```javascript
+// jest.config.js
+/** @type {import('ts-jest').JestConfigWithTsJest} */
+export default {
+  preset: 'ts-jest/presets/default-esm',
+  testEnvironment: 'node',
+  extensionsToTreatAsEsm: ['.ts'],
+  moduleNameMapper: {
+    '^(\\.{1,2}/.*)\\.js$': '$1',
+  },
+  transform: {
+    '^.+\\.tsx?$': [
+      'ts-jest',
+      {
+        useESM: true,
+      },
+    ],
+  },
+  testMatch: ['**/__tests__/**/*.test.ts', '**/*.test.ts'],
+  moduleFileExtensions: ['ts', 'tsx', 'js', 'jsx', 'json', 'node'],
+  collectCoverageFrom: [
+    'src/**/*.ts',
+    '!src/**/*.d.ts',
+    '!src/app.ts',
+  ],
+  coverageDirectory: 'coverage',
+  verbose: true,
+};
+```
+
+### Comandos de Test
+
+```bash
+# Ejecutar todos los tests
+npm test
+
+# Ejecutar tests en modo watch
+npm run test:watch
+
+# Ejecutar tests con cobertura
+npm run test:coverage
+```
+
+### customers.schemas.test.ts
+
+```typescript
+import { createCustomerSchema, updateCustomerSchema, idParamSchema } from '../../customers/customers.schemas.js';
+
+describe('Customer Schemas', () => {
+  
+  describe('createCustomerSchema', () => {
+    
+    describe('Validaciones exitosas', () => {
+      
+      it('debe aceptar datos validos completos', () => {
+        const validData = {
+          first_name: 'Juan',
+          last_name: 'Perez',
+          email: 'juan@email.com',
+          password: 'Password123',
+          phone: '+5491123456789',
+          birth_date: '1990-05-15'
+        };
+        
+        const result = createCustomerSchema.safeParse(validData);
+        expect(result.success).toBe(true);
+      });
+
+      it('debe aceptar datos sin campos opcionales', () => {
+        const validData = {
+          first_name: 'Maria',
+          last_name: 'Garcia',
+          email: 'maria@email.com',
+          password: 'Secure123'
+        };
+        
+        const result = createCustomerSchema.safeParse(validData);
+        expect(result.success).toBe(true);
+      });
+
+      it('debe transformar el email a minusculas', () => {
+        const validData = {
+          first_name: 'Juan',
+          last_name: 'Perez',
+          email: 'JUAN@EMAIL.COM',
+          password: 'Password123'
+        };
+        
+        const result = createCustomerSchema.safeParse(validData);
+        expect(result.success).toBe(true);
+        if (result.success) {
+          expect(result.data.email).toBe('juan@email.com');
+        }
+      });
+    });
+
+    describe('Validaciones de first_name', () => {
+      
+      it('debe rechazar nombre muy corto', () => {
+        const invalidData = {
+          first_name: 'J',
+          last_name: 'Perez',
+          email: 'juan@email.com',
+          password: 'Password123'
+        };
+        
+        const result = createCustomerSchema.safeParse(invalidData);
+        expect(result.success).toBe(false);
+      });
+
+      it('debe rechazar nombre con 3+ letras iguales consecutivas', () => {
+        const invalidData = {
+          first_name: 'Juaaan',
+          last_name: 'Perez',
+          email: 'juan@email.com',
+          password: 'Password123'
+        };
+        
+        const result = createCustomerSchema.safeParse(invalidData);
+        expect(result.success).toBe(false);
+      });
+    });
+
+    describe('Validaciones de password', () => {
+      
+      it('debe rechazar password muy corta', () => {
+        const invalidData = {
+          first_name: 'Juan',
+          last_name: 'Perez',
+          email: 'juan@email.com',
+          password: 'Pass1'
+        };
+        
+        const result = createCustomerSchema.safeParse(invalidData);
+        expect(result.success).toBe(false);
+      });
+
+      it('debe rechazar password sin mayuscula', () => {
+        const invalidData = {
+          first_name: 'Juan',
+          last_name: 'Perez',
+          email: 'juan@email.com',
+          password: 'password123'
+        };
+        
+        const result = createCustomerSchema.safeParse(invalidData);
+        expect(result.success).toBe(false);
+      });
+    });
+  });
+
+  describe('updateCustomerSchema', () => {
+    
+    it('debe aceptar actualizacion parcial', () => {
+      const validData = { first_name: 'Carlos' };
+      const result = updateCustomerSchema.safeParse(validData);
+      expect(result.success).toBe(true);
+    });
+
+    it('debe rechazar objeto vacio', () => {
+      const invalidData = {};
+      const result = updateCustomerSchema.safeParse(invalidData);
+      expect(result.success).toBe(false);
+    });
+  });
+
+  describe('idParamSchema', () => {
+    
+    it('debe aceptar ID numerico como string', () => {
+      const validData = { id: '123' };
+      const result = idParamSchema.safeParse(validData);
+      expect(result.success).toBe(true);
+      if (result.success) {
+        expect(result.data.id).toBe(123);
+      }
+    });
+
+    it('debe rechazar ID no numerico', () => {
+      const invalidData = { id: 'abc' };
+      const result = idParamSchema.safeParse(invalidData);
+      expect(result.success).toBe(false);
+    });
+  });
+});
+```
+
+### bookings.schemas.test.ts
+
+```typescript
+import { createBookingSchema, updateBookingSchema, idParamSchema } from '../../bookings/bookings.schemas.js';
+
+describe('Booking Schemas', () => {
+  
+  const getFutureDate = (daysAhead: number = 7): string => {
+    const date = new Date();
+    date.setDate(date.getDate() + daysAhead);
+    return date.toISOString().split('T')[0];
+  };
+
+  describe('createBookingSchema', () => {
+    
+    it('debe aceptar datos validos completos', () => {
+      const validData = {
+        client_id: 1,
+        client_name: 'Juan Perez',
+        service_id: 1,
+        service_name: 'Corte de pelo',
+        booking_date: getFutureDate(),
+        start_time: '10:00',
+        end_time: '11:00',
+        booking_status: 'pending'
+      };
+      
+      const result = createBookingSchema.safeParse(validData);
+      expect(result.success).toBe(true);
+    });
+
+    it('debe asignar status pending por defecto', () => {
+      const validData = {
+        client_id: 1,
+        client_name: 'Juan Perez',
+        service_id: 1,
+        service_name: 'Corte de pelo',
+        booking_date: getFutureDate(),
+        start_time: '10:00',
+        end_time: '11:00'
+      };
+      
+      const result = createBookingSchema.safeParse(validData);
+      expect(result.success).toBe(true);
+      if (result.success) {
+        expect(result.data.booking_status).toBe('pending');
+      }
+    });
+
+    it('debe rechazar cuando hora fin es anterior a hora inicio', () => {
+      const invalidData = {
+        client_id: 1,
+        client_name: 'Juan Perez',
+        service_id: 1,
+        service_name: 'Corte de pelo',
+        booking_date: getFutureDate(),
+        start_time: '15:00',
+        end_time: '14:00'
+      };
+      
+      const result = createBookingSchema.safeParse(invalidData);
+      expect(result.success).toBe(false);
+    });
+
+    it('debe rechazar status invalido', () => {
+      const invalidData = {
+        client_id: 1,
+        client_name: 'Juan Perez',
+        service_id: 1,
+        service_name: 'Corte de pelo',
+        booking_date: getFutureDate(),
+        start_time: '10:00',
+        end_time: '11:00',
+        booking_status: 'invalid_status'
+      };
+      
+      const result = createBookingSchema.safeParse(invalidData);
+      expect(result.success).toBe(false);
+    });
+  });
+
+  describe('updateBookingSchema', () => {
+    
+    it('debe aceptar actualizacion parcial de status', () => {
+      const validData = { booking_status: 'confirmed' };
+      const result = updateBookingSchema.safeParse(validData);
+      expect(result.success).toBe(true);
+    });
+
+    it('debe rechazar objeto vacio', () => {
+      const invalidData = {};
+      const result = updateBookingSchema.safeParse(invalidData);
+      expect(result.success).toBe(false);
+    });
+  });
+});
+```
+
+### services.controller.test.ts
+
+```typescript
+import { Request, Response } from 'express';
+import { ServicesController } from '../../services/services.controller.js';
+import { ServicesRepository } from '../../services/services.repository.interface.js';
+import { Services } from '../../services/services.entity.js';
+
+const mockServicesRepository: jest.Mocked<ServicesRepository> = {
+  findAll: jest.fn(),
+  findOne: jest.fn(),
+  add: jest.fn(),
+  update: jest.fn(),
+  partialUpdate: jest.fn(),
+  delete: jest.fn(),
+};
+
+const mockRequest = () => ({ params: {}, body: {} } as Partial<Request>);
+const mockResponse = () => {
+  const res = {} as Partial<Response>;
+  res.json = jest.fn().mockReturnValue(res);
+  res.status = jest.fn().mockReturnValue(res);
+  return res;
+};
+
+describe('ServicesController', () => {
+  let controller: ServicesController;
+  let req: Partial<Request>;
+  let res: Partial<Response>;
+
+  beforeEach(() => {
+    controller = new ServicesController(mockServicesRepository);
+    req = mockRequest();
+    res = mockResponse();
+    jest.clearAllMocks();
+  });
+
+  const sampleService: Services = new Services(
+    1, 'Corte de pelo', 'Corte profesional', 30, 1500,
+    'http://example.com/image.jpg', new Date(), new Date()
+  );
+
+  describe('findAllservices', () => {
+    it('debe retornar todos los servicios', async () => {
+      mockServicesRepository.findAll.mockResolvedValue([sampleService]);
+      await controller.findAllservices(req as Request, res as Response);
+      expect(res.json).toHaveBeenCalledWith([sampleService]);
+    });
+  });
+
+  describe('findServiceById', () => {
+    it('debe retornar un servicio por ID', async () => {
+      req.params = { id: '1' };
+      mockServicesRepository.findOne.mockResolvedValue(sampleService);
+      await controller.findServiceById(req as Request, res as Response);
+      expect(res.json).toHaveBeenCalledWith(sampleService);
+    });
+
+    it('debe retornar 404 si el servicio no existe', async () => {
+      req.params = { id: '999' };
+      mockServicesRepository.findOne.mockResolvedValue(null);
+      await controller.findServiceById(req as Request, res as Response);
+      expect(res.status).toHaveBeenCalledWith(404);
+    });
+  });
+
+  describe('deleteService', () => {
+    it('debe retornar 409 si el servicio tiene reservas asociadas', async () => {
+      req.params = { id: '1' };
+      mockServicesRepository.delete.mockRejectedValue({ code: '23503' });
+      await controller.deleteService(req as Request, res as Response);
+      expect(res.status).toHaveBeenCalledWith(409);
+    });
+  });
+});
+```
+
+### customers.service.test.ts
+
+```typescript
+import { CustomersService } from '../../customers/customers.service.js';
+import { CustomersPostgresRepository } from '../../customers/customers.postgres.repository.js';
+import { NotFoundError } from '../../errors/custom-errors.js';
+import bcrypt from 'bcrypt';
+
+jest.mock('../../customers/customers.postgres.repository.js');
+jest.mock('bcrypt');
+
+describe('CustomersService', () => {
+  let service: CustomersService;
+  let mockRepository: jest.Mocked<CustomersPostgresRepository>;
+
+  beforeEach(() => {
+    mockRepository = {
+      findAll: jest.fn(),
+      findById: jest.fn(),
+      create: jest.fn(),
+      update: jest.fn(),
+      delete: jest.fn(),
+    } as unknown as jest.Mocked<CustomersPostgresRepository>;
+    
+    service = new CustomersService(mockRepository);
+    jest.clearAllMocks();
+  });
+
+  describe('getCustomerById', () => {
+    it('debe lanzar NotFoundError si el cliente no existe', async () => {
+      mockRepository.findById.mockResolvedValue(null);
+      await expect(service.getCustomerById(999)).rejects.toThrow(NotFoundError);
+    });
+  });
+
+  describe('createCustomer', () => {
+    it('debe crear un nuevo cliente con password hasheado', async () => {
+      const createInput = {
+        first_name: 'Maria',
+        last_name: 'Garcia',
+        email: 'maria@email.com',
+        password: 'Password123',
+      };
+      
+      (bcrypt.hash as jest.Mock).mockResolvedValue('hashedPassword');
+      mockRepository.create.mockResolvedValue({ id: 1, ...createInput } as any);
+
+      await service.createCustomer(createInput);
+
+      expect(bcrypt.hash).toHaveBeenCalledWith('Password123', 10);
+      expect(mockRepository.create).toHaveBeenCalledWith(
+        expect.objectContaining({ role: 'customer' })
+      );
+    });
+  });
+});
+```
+
+### bookings.service.test.ts
+
+```typescript
+import { BookingsService } from '../../bookings/bookings.service.js';
+import { BookingsPostgresRepository } from '../../bookings/bookings.postgres.repository.js';
+import { NotFoundError, ConflictError } from '../../errors/custom-errors.js';
+
+jest.mock('../../bookings/bookings.postgres.repository.js');
+
+describe('BookingsService', () => {
+  let service: BookingsService;
+  let mockRepository: jest.Mocked<BookingsPostgresRepository>;
+
+  beforeEach(() => {
+    mockRepository = {
+      findAll: jest.fn(),
+      findById: jest.fn(),
+      add: jest.fn(),
+      update: jest.fn(),
+      delete: jest.fn(),
+    } as unknown as jest.Mocked<BookingsPostgresRepository>;
+    
+    service = new BookingsService(mockRepository);
+    jest.clearAllMocks();
+  });
+
+  const sampleBooking = {
+    id: 1,
+    client_id: 1,
+    client_name: 'Juan Perez',
+    service_id: 1,
+    service_name: 'Corte de pelo',
+    booking_date: '2025-06-15',
+    start_time: '10:00',
+    end_time: '11:00',
+    booking_status: 'pending' as const,
+    treatment_id: [],
+    created_at: new Date(),
+    updated_at: new Date(),
+  };
+
+  describe('deleteBooking', () => {
+    it('debe eliminar una reserva cancelada', async () => {
+      const cancelledBooking = { ...sampleBooking, booking_status: 'cancelled' as const };
+      mockRepository.findById.mockResolvedValue(cancelledBooking);
+      mockRepository.delete.mockResolvedValue(undefined);
+
+      await expect(service.deleteBooking(1)).resolves.toBeUndefined();
+      expect(mockRepository.delete).toHaveBeenCalledWith(1);
+    });
+
+    it('debe lanzar ConflictError si la reserva no esta cancelada', async () => {
+      mockRepository.findById.mockResolvedValue(sampleBooking);
+      await expect(service.deleteBooking(1)).rejects.toThrow(ConflictError);
+      expect(mockRepository.delete).not.toHaveBeenCalled();
+    });
+  });
+});
+```
+
+### custom-errors.test.ts
+
+```typescript
+import { 
+  AppError, NotFoundError, ValidationError, 
+  ConflictError, UnauthorizedError 
+} from '../../errors/custom-errors.js';
+
+describe('Custom Errors', () => {
+  
+  describe('NotFoundError', () => {
+    it('debe crear error con recurso especificado', () => {
+      const error = new NotFoundError('Cliente');
+      expect(error.message).toBe('Cliente no encontrado');
+      expect(error.code).toBe('CLIENTE_NOT_FOUND');
+      expect(error.statusCode).toBe(404);
+    });
+  });
+
+  describe('ValidationError', () => {
+    it('debe crear error de validacion', () => {
+      const error = new ValidationError('El email es invalido');
+      expect(error.message).toBe('El email es invalido');
+      expect(error.statusCode).toBe(400);
+    });
+  });
+
+  describe('ConflictError', () => {
+    it('debe crear error de conflicto', () => {
+      const error = new ConflictError('El email ya esta registrado');
+      expect(error.statusCode).toBe(409);
+    });
+  });
+
+  describe('UnauthorizedError', () => {
+    it('debe crear error con mensaje por defecto', () => {
+      const error = new UnauthorizedError();
+      expect(error.message).toBe('No autorizado');
+      expect(error.statusCode).toBe(401);
+    });
+  });
+
+  describe('Error inheritance', () => {
+    it('todos los errores deben ser instanceof AppError', () => {
+      const errors = [
+        new NotFoundError('Test'),
+        new ValidationError('test'),
+        new ConflictError('test'),
+        new UnauthorizedError(),
+      ];
+      errors.forEach(error => expect(error).toBeInstanceOf(AppError));
+    });
+  });
+});
+```
+
+---
+
 ## Estructura de Directorios
 
 ```
@@ -1882,6 +2433,18 @@ turno-ya-backend/
 │       ├── 002_customers.sql
 │       └── 003_bookings.sql
 ├── src/
+│   ├── __tests__/
+│   │   ├── bookings/
+│   │   │   ├── bookings.schemas.test.ts
+│   │   │   └── bookings.service.test.ts
+│   │   ├── customers/
+│   │   │   ├── customers.schemas.test.ts
+│   │   │   └── customers.service.test.ts
+│   │   ├── errors/
+│   │   │   └── custom-errors.test.ts
+│   │   └── services/
+│   │       ├── services.controller.test.ts
+│   │       └── services.entity.test.ts
 │   ├── bookings/
 │   │   ├── bookings.controller.ts
 │   │   ├── bookings.entity.ts
@@ -1921,6 +2484,7 @@ turno-ya-backend/
 ├── .env
 ├── .gitignore
 ├── docker-compose.yml
+├── jest.config.js
 ├── package.json
 ├── README.md
 └── tsconfig.json
